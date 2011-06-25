@@ -1,0 +1,18 @@
+<?xml version="1.0" ?><package>
+	<name>%(name)s</name>
+	<domain>%(domain)s</domain>
+	<author>%(author)s</author>
+	<email>%(email)s</email>
+	<company>%(company)s</company>
+	<changes>%(changes)s</changes>
+	<changepat>%(changepat)s</changepat>
+	<todo>%(todo)s</todo>
+	<version>1.0.0d0</version>
+	<filter extension=".DS_Store"/>
+	<filter extension=".pyc"/>
+	<dependencies>
+		<dependency>%(build_dependency)s</dependency>
+	</dependencies>
+	<previous>
+	</previous>
+</package>

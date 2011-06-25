@@ -1,0 +1,92 @@
+<html>
+	<head>
+		<title>Things to do still</title>
+	</head>
+	<body>
+
+	<h1>Things to still do</h1>
+
+	<ul>
+		<li>Examples:
+			<ul>
+				<li>executable -> .a (-> .o -> .c), .o (-> .c), .dylib<br>
+					preprocess libtool all .a inputs<br>
+					postprocess strip
+				</li>
+				<li>.a -> .o (-> .c)</li>
+				<li>.o -> .h, .c</li>
+			</ul>
+			Store off in a file the targets.<br>
+			Target
+			<ul>
+				<li>FileTarget</li>
+				<li>DirectoryTarget</li>
+			</ul>
+			Methods
+			<ul>
+				<li>path
+			</ul>
+		</li>
+		<li>In bExport.Store.__find, if reported: log that we don't have this item anymore (maybe report to user)</li>
+		<li>Have bExport.Store.__download call bArchive to validate the signature</li>
+		<li>Warn when using a new key (do nothing unless force option specified)</li>
+		<li>In upgrade, you can type ?# to open the changes file (extracted to /tmp and then opened)</li>
+		<li>Store trust/distrust keys in exports (signed)</li>
+		<li>Add reminder to update changes file on export</li>
+		<li>In preferences file if there is a &lt;sync&gt; tag, it's contents should be:
+			<code>ftp://user:pass@server.com/path</code><br/>
+			bExport.Store.create would look at the exports.txt files and synchronize them.
+			It would also copy exports in exports.txt up to ftp and down from ftp.</li>
+		<li>Verbs
+		<ul>
+			<li>build - run rules, etc.</li>
+			<li>buildAll - ensure all dependencies are built and then run rules</li>
+			<li>clean - cleans just this project's stuff</li>
+			<li>cleannAll - cleans all projects</li>
+			<li>diff - able to diff against previous version (default) or given version</li>
+			<li>sync - ensures all dependencies are synced, if untrusted is found, stop unless ignore trust is specified</li>
+			<li>branch - branches an export into another directory, changing domain and owner and bumping version</li>
+			<li>integrate - looks for common source between export and this package and does it's best to apply changes - conflicts stored in two files</li>
+			<li>trust - Adds the creator of the export to the trusted list</li>
+			<li>distrust - Adds the creator of the export to the distrust list</li>
+			<li>reviewed - Marks an export as reviewed, meaning you have validated that it does what it is supposed to
+				and has no hidden mal effects.</li>
+		</ul></li>
+		<li>have only upgrade and sync ensure fully there (and use quick every other time)</li>
+		<li>rules system</li>
+		<li>Add platform dependencies &lt;dependency platform=mac&gt;...&lt;/dependency&gt;</li>
+		<li>Add verbose and quiet</li>
+		<li>Build a trust tree. Who we trust and who they trust/distrust. Links are trusts. Find shortest path
+			to trust or distrust. distrust is a tie-breaker.</li>
+		<li>Trust in exports.txt ([dis]trust:[pub_key]:[my_pub_key]:md5:[signature])
+			md5 is of "distrust:45jkjdfg9f4j:j45k34jkfj:md5:"</li>
+		<li>Validated export: valid:[pub_key]:md5:[signature]:[name]</li>
+		<li>exports.txt format:</li>
+<pre>
+http://server.com/path/exports.txt # path to list of items on another server
+com_myberrygoodhealth_build_1_0_0d351_e4e553be21f8aebeeff8f644cd51cc37.zip # item that exists on this server
+trust:4j53h4j5h43k5:jkh435kjh3k5:md5:af74f8493f # this public key is trusted by this other pubic key
+distrust:4j53h4j5h43k5:jkh435kjh3k5:md5:af74f8493f # this public key is distrusted by this other pubic key
+valid:4j53h4j5h43k5:md5:4j53h4j5h43k5:com_myberrygoodhealth_build_1_0_0d351_e4e553be21f8aebeeff8f644cd51cc37.zip # this export has been reviewed
+</pre>
+		<li>in build.py, evaluate findABuild and determine if the index in the list should be -1 or 0</li>
+		<li>Add documentation to all classes, methods, constants and functions</li>
+		<li>in bDOM.py make sure CDATA is handled correctly in extractTextFromTagContents</li>
+		<li>in bArchive.py make sure manifest paths are / and file paths are platform</li>
+		<li>in bArchive.py make sure zip path separators are correct (specifically on DOS)</li>
+		<li>In build.py, make sure all paths will work on all platforms (separators)</li>
+		<li>in bArchive.py, make sure we do the right thing for DOS and links</li>
+		<li>Add logging mechanism</li>
+	</ul>
+
+	<h1>Rule System</h1>
+
+	<ul>
+		<li>field in package file for path to rules file (defaults to rules.py)</li>
+		<li>Called passing __name__ as "__init__", returns phases (in order) that it wants to be notified of</li>
+		<li>phases get ordered and then called in that order</li>
+		<li>QUESTION: What gets passed around for shared data?</li>
+	</ul>
+
+	</body>
+</html>
