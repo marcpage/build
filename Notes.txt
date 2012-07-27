@@ -1,0 +1,65 @@
+./build.py
+	Generates if doesn't exist and stops:
+		~/Library/Preferences/build_settings.xml
+	Looks in package.xml for the build version and looks it up
+	if no package.xml, looks for more recent build version
+	Calls into build
+		Generates if doesn't exist and stops:
+			package.xml
+			todo.html
+			changes.html
+		Gets dependencies
+
+<?xml version="1.0" ?><package>
+	<name>build</name>
+	<domain>com_itscommunity</domain>
+	<author>Marc Page</author>
+	<email>MarcAllenPage@gmail.com</email>
+	<version>1.0.0d372</version>
+	<changes>changes.html</changes>
+	<changepat>&lt;!-- Insert New Version Here --&gt;</changepat> # Use CDATA
+	<todo>todo.html</todo>
+	<company>It's Community</company>
+	<filter name=".DS_Store"/>
+	<filter extension=".pyc"/>
+	<filter path="old"/>
+	<dependencies>
+		<dependency id="compile" name="com.itscommunity.compile.1.0.0d0_de8d8f61bc358513c7fa9c7dcf61b50c.zip">
+	</dependencies>
+	<features>
+		<feature name="xcod
+	</feature>
+	<previous>
+	</previous>
+</package>
+
+Previous Version is limited to at most 40:
+	10 most recent builds
+	10 most recent patches
+	10 most recent minor
+	10 most recent major
+
+
+<package>
+	<name>compile</name>
+	<domain>com.itscommunity</domain>
+	<author>Marc page</author>
+	<email>MarcAllenPage@gmail.com</email>
+	<version>1.0.0d0</version>
+	<changes>changes.html</changes>
+	<changepat><![CDATA[<!-- Insert New Version Here -->]]></changepat>
+	<todo>todo.html</todo>
+	<company>It's Community</company>
+	<filter name=".DS_Store"/>
+	<filter name="._.DS_Store"/>
+	<filter extension=".pyc"/>
+	<feature name="xcode40" os="mac" proc="x64,i386">
+		<dependency name="com.apple.xcode40.4.0.0d0_de8d8f61bc358513c7fa9c7dcf61b50c.zip"/>
+	</feature>
+	<feature name="xcode32" os="mac" proc="x64,i386">
+		<dependency name="com.apple.xcode32.3.2.0d0_de8d8f61bc358513c7fa9c7dcf61b50c.zip"/>
+	</feature>
+	<feature name="xcode40_sdk106" os="mac" proc="x64,i386">
+		<dependency name="com.apple.xcode40_sdk106.4.0.0d0_de8d8f61bc358513c7fa9c7dcf61b50c.zip"/>
+	</feature>
+</package>
