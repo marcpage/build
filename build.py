@@ -11,7 +11,6 @@ import xml.sax
 import zipfile
 import cStringIO
 import xml.dom.minidom
-
 try:
 	import hashlib
 	kUseHashlib= True
@@ -19,26 +18,17 @@ except:
 	import sha
 	kUseHashlib= False
 
+global gEnvironment
+global gFallbackServers
+gEnvironment= {}
+gFallbackServers= [
+	"http://itscommunity.com/build/exports.xml",
+]
+
 def newHasher():
 	if kUseHashlib:
 		return hashlib.sha1()
 	return sha.new()
-
-global gEnvironment
-global kDefaultPreferences
-
-gEnvironment= {}
-kDefaultPreferences= """<build>
-	<exports>%(export)s</exports>
-	<dependencies>%(dependencies)s</dependencies>
-	<base_url>%(url)s</base_url>
-	<scratch>%(scratch)s</scratch>
-	<domain>com_yourdomain</domain>
-	<author>Your Name</author>
-	<email>your@email.address</email>
-	<company>Your Company Name</company>
-	<untitled>Untitled</untitled>
-</build>"""
 
 def extractTextFromTagContents(tagElement):
 	child= tagElement.firstChild
@@ -54,11 +44,9 @@ def extractTextFromTagContents(tagElement):
 	return text
 
 def findTagByPath(xml, path):
-	#print "findTaxByPath(",xml,",",path,")"
 	element= xml.documentElement
 	parts= path.split('/')
 	for part in parts:
-		#print "\t","part",part
 		elementList= element.getElementsByTagName(part)
 		if len(elementList) == 0:
 			return None
@@ -71,9 +59,8 @@ def extractTagTextByPath(xml, path):
 		return None
 	return extractTextFromTagContents(tag)
 
-global kExportNamePattern
-kExportNamePattern= re.compile(r"^(.*[/\\])?(.*)_([0-9]+_[0-9]+_[0-9]+[dabf][0-9]+)_([a-zA-Z0-9]+)\.zip$")
 def splitIdIntoParts(item):
+	kExportNamePattern= re.compile(r"^(.*[/\\])?([^/\\]+)\.([^/\\.]+)_([0-9]+\.[0-9]+\.[0-9]+[dabf][0-9]+)_([a-zA-Z0-9]+)\.zip$")
 	parts= {}
 	if os.path.isfile(item):
 		(parts['path'], parts['filename'])= os.path.split(item)
@@ -83,16 +70,130 @@ def splitIdIntoParts(item):
 		parts['filename']= item
 	match= kExportNamePattern.match(parts['filename'])
 	if not match:
-		return (None, None, None, None, None, None)
+		return None
 	parts.update({
-		'fullname': match.group(2),
+		'domain': match.group(2),
+		'name': match.group(3),
 		'version': match.group(3),
 		'hash': match.group(4),
 	})
 	return parts
 
+def compareVersions(v1, v2):
+	kVersionPattern= re.compile(r"^([0-9]+)[._]([0-9]+)[._]([0-9]+)([dabf])([0-9]+)$")
+	m1= kVersionPattern.match(v1)
+	m2= kVersionPattern.match(v2)
+	if int(m1.group(1)) != int(m2.group(1)):
+		return int(m1.group(1)) - int(m2.group(1))
+	if int(m1.group(2)) != int(m2.group(2)):
+		return int(m1.group(2)) - int(m2.group(2))
+	if int(m1.group(3)) != int(m2.group(3)):
+		return int(m1.group(3)) - int(m2.group(3))
+	if kBuildPhaseOrder.find(m1.group(4)) != kBuildPhaseOrder.find(m2.group(4)):
+		return kBuildPhaseOrder.find(m1.group(4)) - kBuildPhaseOrder.find(m2.group(4))
+	return int(m1.group(5)) - int(m2.group(5))
+
+def parseServerManifest(contents):
+	serverInfo= {'servers':[],'exports':[]}
+	serverXML= xml.dom.minidom.parseString(contents)
+	serverList= findTagByPath(serverXML, "servers")
+	if serverList:
+		for server in serverList.getElementsBytTagName("server"):
+			serverInfo['servers'].append(extractTextFromTagContents(server))
+	serverList= findTagByPath(serverXML, "exports")
+	if serverList:
+		for server in serverList.getElementsBytTagName("export"):
+			serverInfo['exports'].append(extractTextFromTagContents(server))
+	serverXML.unlink()
+	return serverInfo
+
+def __filterArchiveList(environment, exports, domain, name, firstOnly= True, minimumVersion= None):
+	found= []
+	items= filter(lambda x: splitIdIntoParts(x) != None,exports)
+	items.sort(lambda x,y: compareVersions(
+								splitIdIntoParts(y)['version'],
+								splitIdIntoParts(x)['version']
+	))
+	for item in items:
+		parts= splitIdIntoParts(item)
+		matches= False
+		if parts['domain'].lower() == domain.lower():
+			if parts['name'].lower() == name.lower():
+				if not minimumVersion or compareVersions(parts['version'],minimumVersion) >= 0:
+					matches= True
+		if matches:
+			if firstOnly:
+				return os.path.join(environment['export_path'], item)
+			else:
+				found.append(os.path.join(environment['export_path'], item))
+	return found
+
+def __getLocalExportArchivePath(environment, domain, name, firstOnly= True, minimumVersion= None):
+	return __filterArchiveList(environment, os.listdir(environment['export_path']), domain, name, firstOnly, minimumVersion)
+
+def getExports(environment, domain, name, firstOnly= True, minimumVersion= None):
+	found= __getLocalExportArchivePath(environment, domain, name, firstOnly, minimumVersion)
+	if found:
+		return found
+	servers= list(gFallbackServers)
+	try:
+		exportsFile= open(os.path.join(environment['export_path'], "exports.xml"))
+		contents= exportsFile.read()
+		exportsFile.close()
+		info= parseServerManifest(contents)
+		for server in info['servers']:
+			if server not in servers:
+				servers.append(server)
+	except:
+		pass
+	allServers= []
+	goodServers= []
+	while len(servers) > 0:
+		server= pop(servers)
+		if server not in allServers:
+			allServers.append(server)
+		try:
+			serverConnection= urllib2.urlopen(server)
+			contents= serverConnection.read()
+			serverConnection.close()
+		except:
+			contents= None
+		if contents:
+			goodServers.append(server)
+			info= parseServerManifest(contents)
+			for server in info['servers']:
+				if server not in allServers:
+					servers.append(server)
+					allServers.append(server)
+			remote= __filterArchiveList(
+						environment, info['exports'], domain, name,
+						firstOnly= False, minimumVersion= minimumVersion
+			)
+			baseURL= server.rsplit('/', 1)[0].strip()
+			found.extend(map(lambda x:baseURL+'/'+x,remote))
+			while firstOnly and len(remote) > 0:
+				item= remote.pop(0)
+				url= baseURL+'/'+item
+				destinationPath= os.path.join(environment['export_path'], item)
+				try:
+					sourceConnection= urllib2.urlopen(url)
+					destinationFile= open(destinationPath, 'w')
+					while True:
+						block= sourceConnection.read(kReadBlockSize)
+						if not block:
+							break
+						destinationFile.write(block)
+					destinationFile.close()
+					sourceConnection.close()
+					return destinationPath
+				except:
+					pass
+	if firstOnly:
+		return None
+	return (found, goodServers)
+
 def __init(environment):
-	basename= os.path.splitext(os.path.split(__file__)[1][0]
+	basename= os.path.splitext(os.path.split(__file__)[1])[0]
 	startPath= os.path.split(os.path.realpath(__file__))[0]
 	if os.name == 'posix' and os.uname()[0] == 'Darwin':
 		environment.update({
@@ -127,10 +228,13 @@ def __getPrefInfo(environment):
 
 def __findBuild(environment, location):
 	idParts= splitIdIntoParts(location)
-	buildName= os.splitext(idParts['fullname'])[0]
-	environment['build_path']= os.path.join(environment['dependencies_path'], buildName)
+	environment['build_path']= os.path.join(environment['dependencies_path'], idParts['domain'], idParts['name'], idParts['version'])
 	if not os.path.isdir(environment['build_path']):
-		# fill in
+		buildArchive= getExports(environment, "com.itscommunity", "build", firstOnly= True)
+		if None == buildArchive:
+			print "Cannot find com.itscommunity.build export, please download one to:"
+			print "\t",environment['export_path']
+			sys.exit(1)
 
 def __loadPackage(environment):
 	packageXML= xml.dom.minidom.parse(environment['package_path'])
@@ -153,6 +257,18 @@ def __getBuildPath(environment):
 	if os.path.isfile(environment['package_path']):
 		__loadPackage(environment)
 
+
+global kDefaultPreferences
+kDefaultPreferences= """<build>
+	<exports>%(export)s</exports>
+	<dependencies>%(dependencies)s</dependencies>
+	<base_url>%(url)s</base_url>
+	<scratch>%(scratch)s</scratch>
+	<domain>com.yourdomain</domain>
+	<author>Your Name</author>
+	<email>your@email.address</email>
+	<company>Your Company Name</company>
+</build>"""
 if __name__ == "__main__":
 	__init(gEnvironment)
 	if not os.path.isfile(gEnvironment['preferences_path']):
@@ -171,4 +287,4 @@ if __name__ == "__main__":
 		os.makedirs(gEnvironment['export_path'])
 	if not os.path.isdir(gEnvironment['dependencies_path']):
 		os.makedirs(gEnvironment['dependencies_path'])
-
+	__getBuildPath(environment)
