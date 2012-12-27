@@ -19,11 +19,7 @@ except:
 	kUseHashlib= False
 
 global gEnvironment
-global gFallbackServers
 gEnvironment= {}
-gFallbackServers= [
-	"http://itscommunity.com/build/exports.xml",
-]
 
 def newHasher():
 	if kUseHashlib:
@@ -98,11 +94,11 @@ def parseServerManifest(contents):
 	serverXML= xml.dom.minidom.parseString(contents)
 	serverList= findTagByPath(serverXML, "servers")
 	if serverList:
-		for server in serverList.getElementsBytTagName("server"):
+		for server in serverList.getElementsByTagName("server"):
 			serverInfo['servers'].append(extractTextFromTagContents(server))
 	serverList= findTagByPath(serverXML, "exports")
 	if serverList:
-		for server in serverList.getElementsBytTagName("export"):
+		for server in serverList.getElementsByTagName("export"):
 			serverInfo['exports'].append(extractTextFromTagContents(server))
 	serverXML.unlink()
 	return serverInfo
@@ -210,7 +206,7 @@ def __init(environment):
 			'start_script': __file__,
 			'start_script_name': os.path.split(__file__)[1],
 			'package_path': os.path.join(startPath, "package.xml"),
-			'export_name_pattern': re.compile(r"^(.*[/\\])?(.*)_([0-9]+_[0-9]+_[0-9]+[dabf][0-9]+)_([a-zA-Z0-9]+)\.zip$"),
+			'export_servers': ["http://itscommunity.com/build/exports.xml"],
 			'findTagByPath': findTagByPath,
 			'extractTextFromTagContents': extractTextFromTagContents,
 			'extractTagTextByPath': extractTagTextByPath,
@@ -247,8 +243,9 @@ def __loadPackage(environment):
 		if itemXMLList:
 			for export in itemXMLList.getElementsByTagName("dependency"):
 				location= extractTextFromTagContents(export)
+				getExpo
 				isExportName= environment['export_name_pattern'].match(location.split("/")[-1].strip())
-				if isExportName and isExportName.group(2) == "com.itscommunity.build":
+				if isExportName and isExportName.group(2) == "com.itscommunity":
 					__findBuild(environment, location.strip())
 					break
 	packageXML.unlink()
@@ -256,7 +253,140 @@ def __loadPackage(environment):
 def __getBuildPath(environment):
 	if os.path.isfile(environment['package_path']):
 		__loadPackage(environment)
+	else:
+		__findBuild(environment)
 
+
+
+def findExportArchives(environment, domain, name, firstOnly= False, minimumVersion= None):
+	found= __filterArchiveList(
+				environment, os.listdir(environment['export_path']),
+				domain, name, firstOnly, minimumVersion
+	)
+
+def readFileInZip(zipFileObject, path):
+	try:
+		zipFile= zipFileObject.open(path)
+		contents= zipFile.read()
+		zipFile.close()
+	except:
+		contents= zipFileObject.read(path)
+	return contents
+
+def hashFile(source, destination= None, eol= None):
+	binaryHash= newHasher()
+	if not eol and not destination:
+		eol= "\n"
+	if eol:
+		textHash= newHasher()
+	isText= True
+	while True:
+		block= source.read(4096)
+		if block:
+			break
+		if block[-1] == "\r":
+			next= source.read(1)
+			block+= next
+		if isText:
+			isText= block.find("\0") < 0
+		if isText:
+			dosEOLCount= block.count("\r\n")
+			unixEOLCount= block.count("\n")
+			macEOLCount= block.count("\n")
+			isText= dosEOLCount > 0 and dosEOLCount != unixEOLCount
+			isText= isText and dosEOLCount > 0 and dosEOLCount != macEOLCount
+			isText= isText and (macEOLCount == unixEOLCount or macEOLCount * unixEOLCount == 0)
+		if None == destination and None != eol and not isText:
+			eol= None
+		binaryHash.update(block)
+		if eol:
+			textBlock= block.replace("\r\n", "\n").replace("\r", "\n")
+			textHash.update(textBlock)
+	if eol:
+		textHash= textHash.hexdigest()
+	else:
+		textHash= None
+	return (binaryHash.hexdigest(), isText, textHash)
+
+def directoryToManifest(path, subPath= "", manifest= None):
+	if None == manifest:
+		manifest= {}
+	for item in os.listdir(os.path.join(path, subPath)):
+		relative= os.path.join(subPath, item)
+		fullPath= os.path.join(path, relative)
+		if os.path.isdir(fullPath):
+			manifest[relativePath]= None
+			directoryToManifest(path, relative, manifest)
+		else:
+			manifest[relativePath]= hashFile(fullPath)
+	return manifest
+
+def manifestToManifest(contents):
+	manifest= {}
+	manifestXML= xml.dom.minidom.parseString(contents)
+	for directory in manifestXML.getElementsByTagName("directory"):
+		manifest[directory.getAttribute("path")]= None
+	for file in manifestXML.getElementsByTagName("file"):
+		manifest[file.getAttribute("path")]= extractTextFromTagContents(file)
+	manifestXML.unlink()
+	return manifest
+
+def fullyDeleteDirectoryHierarchy(path):
+	for (root, dirs, files) in os.walk(path, topdown= False):
+		for file in files:
+			os.remove(os.path.join(root, file))
+		for dir in dirs:
+			os.rmdir(os.path.join(root, dir))
+
+def extractExportArchive(environment, source):
+	exportZip= zipfile.ZipFile(exportFile, "r")
+	manifest= readFileInZip(exportZip, "manifest.xml")
+	hasher= newHasher()
+	hasher.update(manifest.replace("\r\n", "\n").replace("\r", "\n"))
+	idParts= splitIdIntoParts(source)
+	if idParts['hash'].lower() != hasher.hexdigest().lower():
+		raise SyntaxError("Manifest Hash does not match for: "+source)
+	destination= os.path.join(
+		environment['dependencies_path'],
+		idParts['domain'], idParts['name'], idParts['version']
+	)
+	if not os.path.isdir(destination):
+		os.makedirs(destination)
+	sourceManifest= manifestToManifest(manifest)
+	destinationManifest= directoryToManifest(destination)
+	toRemove= filter(lambda x:not sourceManifest.has_key(x), destinationManifest.keys())
+	toAdd= filter(lambda x:not destinationManifest.has_key(x), sourceManfest.keys())
+	toCheck= filter(lambda x: sourceManfeist.has_key(x), destinationManifest.keys())
+	for item in toCheck:
+		good= destinationManifest[item] == sourceManifest[item]
+		if good and None != destinationManifest[item]:
+			good= destinationManifest[item][0].lower() == sourceManifest[item].lower()
+			if not good and destinationManifest[item][2]:
+				good= destinationManifest[item][2].lower() == sourceManifest[item].lower()
+		if not good:
+			toRemove.append(item)
+			toAdd.append(item)
+	for item in toRemove:
+		if os.path.isdir(item):
+
+	exportZip.close()
+
+def downloadExportArchive(environment, url):
+	(folder, filename)= url.rsplit('/', 1)
+	destinationPath= os.path.join(environment['export_path'], filename)
+	sourceConnection= urllib2.urlopen(url)
+	destinationFile= open(destinationPath, 'w')
+	while True:
+		block= sourceConnection.read(kReadBlockSize)
+		if not block:
+			break
+		destinationFile.write(block)
+	destinationFile.close()
+	sourceConnection.close()
+	if not validExportArchive(path):
+		os.remove(destinationPath)
+		destinationPath= None
+	return destinationPath
 
 global kDefaultPreferences
 kDefaultPreferences= """<build>
